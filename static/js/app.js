@@ -197,11 +197,11 @@
         }
         statsPanel.classList.remove('hidden');
         statsPanel.innerHTML = '';
-        statsPanel.appendChild(statBox('Best (rank 1)', stats.best, stats.total));
-        statsPanel.appendChild(statBox('Bottom of profit zone', stats.profit_bottom, stats.total));
+        statsPanel.appendChild(statBox('Most profitable', stats.best, stats.total));
+        statsPanel.appendChild(statBox('Lowest still positive', stats.profit_bottom, stats.total));
         statsPanel.appendChild(statBox('Middle (median)', stats.median, stats.total));
-        statsPanel.appendChild(statBox('Top of loss zone', stats.loss_top, stats.total));
-        statsPanel.appendChild(statBox('Worst (last rank)', stats.worst, stats.total));
+        statsPanel.appendChild(statBox('Least negative', stats.loss_top, stats.total));
+        statsPanel.appendChild(statBox('Most negative', stats.worst, stats.total));
     }
 
     function render(state) {

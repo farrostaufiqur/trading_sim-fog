@@ -194,6 +194,7 @@ def run_chunk(conn):
             completed_runs.append((run_no, balance, epoch, run_stop_reason))
             if run_no >= total_runs:
                 overall_done = True
+                pool = 0.0  # this repeat's last trade is already closed/settled into balance
                 break
             # start the next repeat fresh, same starting balance — nothing
             # from the repeat that just ended needs to survive in the chart
@@ -290,7 +291,17 @@ def chart_points(conn, max_points=800):
 def ranked_stats(conn):
     """Rank breakdown across all completed repeats' final balances, best to
     worst. Only meaningful once the whole run is finished — computed once
-    rather than on every status poll while running."""
+    rather than on every status poll while running.
+
+    A repeat's stored final_balance is already its full closed-out equity —
+    every epoch buys, resolves the win/loss, and sells back into balance in
+    the same step (see run_chunk), so there's never money sitting in `pool`
+    separately from `balance` at a repeat's end; adding pool on top here
+    would double-count the last trade rather than reflect "sell everything
+    back to balance". The positive/negative split below is against zero,
+    not the starting balance — a repeat that ends below its starting
+    balance but still above zero counts as the "positive" side.
+    """
     total = conn.execute("SELECT COUNT(*) c FROM simulation_run").fetchone()['c']
     if total == 0:
         return None
@@ -308,14 +319,13 @@ def ranked_stats(conn):
     worst = at_rank(total)
     median = at_rank((total + 1) // 2)
 
-    profit_boundary_row = conn.execute(
-        "SELECT MIN(rn) rn FROM (SELECT ROW_NUMBER() OVER (ORDER BY final_balance DESC, run_no ASC) rn, final_balance FROM simulation_run) WHERE final_balance < ?",
-        (balance_initial,),
+    negative_boundary_row = conn.execute(
+        "SELECT MIN(rn) rn FROM (SELECT ROW_NUMBER() OVER (ORDER BY final_balance DESC, run_no ASC) rn, final_balance FROM simulation_run) WHERE final_balance < 0"
     ).fetchone()
-    loss_start_rank = profit_boundary_row['rn'] if profit_boundary_row and profit_boundary_row['rn'] else None
+    negative_start_rank = negative_boundary_row['rn'] if negative_boundary_row and negative_boundary_row['rn'] else None
 
-    profit_bottom = at_rank(loss_start_rank - 1) if loss_start_rank and loss_start_rank > 1 else None
-    loss_top = at_rank(loss_start_rank) if loss_start_rank else None
+    profit_bottom = at_rank(negative_start_rank - 1) if negative_start_rank and negative_start_rank > 1 else None
+    loss_top = at_rank(negative_start_rank) if negative_start_rank else None
 
     return {
         'total': total,
