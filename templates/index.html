@@ -17,7 +17,7 @@
     <link href="/static/equation/css/satoshi.css" rel="stylesheet">
     <link href="/static/equation/fontawesome/css/all.min.css" rel="stylesheet">
     <link href="/static/equation/theme-vars.css" rel="stylesheet">
-    <link href="/static/equation/assets/css/custom/tradingsim.css" rel="stylesheet">
+    <link href="/static/equation/assets/css/custom/tradingsim.css?v={{ asset_version }}" rel="stylesheet">
 </head>
 <body class="layout-boxed no-sidebar" page="tradingsim">
 
@@ -235,6 +235,6 @@
     <script src="/static/equation/bootstrap/js/bootstrap.bundle.min.js"></script>
     <script src="/static/equation/plugins/perfect-scrollbar/perfect-scrollbar.min.js"></script>
     <script src="/static/equation/layouts/vertical-dark-menu/app.js"></script>
-    <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/app.js') }}?v={{ asset_version }}"></script>
 </body>
 </html>

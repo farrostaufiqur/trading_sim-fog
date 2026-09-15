@@ -1,12 +1,20 @@
 """SQLite storage for the trading simulator.
 
-Single file, single writer, single thread by design (see CLAUDE.md at the
-project root: "hanya gunakan 1 thread, hanya gunakan 1 db"). There is exactly
-one simulation row (id = 1) — the whole app has one global, shared state that
-every device reads the same way.
+Single database file, single active simulation — there is exactly one
+simulation row (id = 1), the whole app has one global, shared state that
+every device reads the same way. That's the "single DB" rule (see CLAUDE.md
+at the project root); it's about there only ever being one instance/one
+active run, not about the HTTP server having one worker thread.
+
+Each thread gets its own sqlite3 connection to the same file (the standard,
+safe way to use SQLite from a multi-threaded server — a single connection
+shared across real OS threads is not); WAL mode lets GET requests (state
+polling, page loads) keep reading while a /api/tick calculation is mid-write
+instead of queuing behind it.
 """
 import os
 import sqlite3
+import threading
 
 DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'instance', 'tradingsim.db')
 
@@ -61,16 +69,27 @@ CREATE TABLE IF NOT EXISTS simulation_run (
 );
 """
 
-_conn = None
+# Serializes the actual calculation (start/run_chunk/stop/reset) to one at a
+# time, same as before — this is the "1 thread" that matters: only one
+# /api/tick calculation ever runs at once, no matter how many HTTP worker
+# threads waitress has. Plain reads (get_state, chart_points, ranked_stats)
+# don't take this lock, so a page load or another viewer's poll is never
+# stuck behind an in-progress chunk.
+calc_lock = threading.Lock()
+
+_local = threading.local()
 
 
 def get_conn():
-    global _conn
-    if _conn is None:
+    conn = getattr(_local, 'conn', None)
+    if conn is None:
         os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
-        _conn = sqlite3.connect(DB_PATH, check_same_thread=False)
-        _conn.row_factory = sqlite3.Row
-        _conn.executescript(SCHEMA)
-        _conn.execute("INSERT OR IGNORE INTO simulation (id, status) VALUES (1, 'idle')")
-        _conn.commit()
-    return _conn
+        conn = sqlite3.connect(DB_PATH, timeout=30)
+        conn.row_factory = sqlite3.Row
+        conn.execute("PRAGMA journal_mode=WAL")
+        conn.execute("PRAGMA busy_timeout=30000")
+        conn.executescript(SCHEMA)
+        conn.execute("INSERT OR IGNORE INTO simulation (id, status) VALUES (1, 'idle')")
+        conn.commit()
+        _local.conn = conn
+    return conn
