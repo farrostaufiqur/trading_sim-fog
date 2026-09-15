@@ -57,23 +57,27 @@
                         trading. Whichever direction it is, that side's percentage of your
                         current balance is staked; <strong>spread</strong> is the cost of the
                         buy/sell price gap, charged every trade regardless of outcome.
+                        <br>
+                        The defaults below reproduce the Kelly-optimal 33% bet size scenario
+                        (50/50 odds of +100%/-60%, 1,000 people, 100 rounds each) from the
+                        reference video — change any field to try your own numbers.
                     </div>
                     <div class="row g-3">
                         <div class="col-md-3 col-6">
                             <label class="form-label">Balance</label>
-                            <input type="number" class="form-control" name="balance" step="0.01" min="0.01" value="1000" required>
+                            <input type="number" class="form-control" name="balance" step="0.01" min="0.01" value="100000000" required>
                         </div>
                         <div class="col-md-3 col-6">
                             <label class="form-label">Buy % <small class="text-muted">position size when going long</small></label>
-                            <input type="number" class="form-control" name="buy_pct" step="0.01" min="0" max="100" value="30" required>
+                            <input type="number" class="form-control" name="buy_pct" step="0.01" min="0" max="100" value="33" required>
                         </div>
                         <div class="col-md-3 col-6">
                             <label class="form-label">Sell % <small class="text-muted">position size when going short</small></label>
-                            <input type="number" class="form-control" name="sell_pct" step="0.01" min="0" max="100" value="30" required>
+                            <input type="number" class="form-control" name="sell_pct" step="0.01" min="0" max="100" value="33" required>
                         </div>
                         <div class="col-md-3 col-6">
                             <label class="form-label">Spread % <small class="text-muted">buy/sell price gap, cost per trade</small></label>
-                            <input type="number" class="form-control" name="spread_pct" step="0.001" min="0" value="0.05" required>
+                            <input type="number" class="form-control" name="spread_pct" step="0.001" min="0" value="0" required>
                         </div>
                         <div class="col-md-3 col-6">
                             <label class="form-label">Profit % <small class="text-muted">win weight</small></label>
@@ -85,7 +89,7 @@
                         </div>
                         <div class="col-md-3 col-6">
                             <label class="form-label">Number of simulations <small class="text-muted">N independent repeats</small></label>
-                            <input type="number" class="form-control" name="total_simulations" step="1" min="1" value="100" required>
+                            <input type="number" class="form-control" name="total_simulations" step="1" min="1" value="1000" required>
                         </div>
                         <div class="col-md-3 col-6">
                             <label class="form-label">Max epoch <small class="text-muted">trade cap per simulation</small></label>
@@ -104,7 +108,7 @@
                         </div>
                         <div id="profit-fixed" class="col-md-3 col-6">
                             <label class="form-label">Profit amount % <small class="text-muted">payout on a win</small></label>
-                            <input type="number" class="form-control" name="profit_amount" step="0.01" min="0" value="1">
+                            <input type="number" class="form-control" name="profit_amount" step="0.01" min="0" value="100">
                         </div>
                         <div id="profit-range" class="col-md-6 col-12 row g-3 hidden">
                             <div class="col-6">
@@ -127,7 +131,7 @@
                         </div>
                         <div id="loss-fixed" class="col-md-3 col-6">
                             <label class="form-label">Loss amount % <small class="text-muted">cost on a loss</small></label>
-                            <input type="number" class="form-control" name="loss_amount" step="0.01" min="0" value="1">
+                            <input type="number" class="form-control" name="loss_amount" step="0.01" min="0" value="60">
                         </div>
                         <div id="loss-range" class="col-md-6 col-12 row g-3 hidden">
                             <div class="col-6">
