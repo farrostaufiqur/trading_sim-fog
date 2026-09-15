@@ -46,7 +46,7 @@ CREATE TABLE IF NOT EXISTS simulation (
     worst_balance REAL,                           -- worst epoch balance within the current repeat
     last_is_profit INTEGER,
     last_direction INTEGER,                        -- 1 = buy (long), 0 = sell (short)
-    stop_reason TEXT,                             -- null | 'depleted' | 'epoch_limit' | 'manual' | 'done'
+    stop_reason TEXT,                             -- null | 'epoch_limit' | 'manual' | 'done'
 
     created_at TEXT,
     finished_at TEXT

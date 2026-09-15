@@ -7,9 +7,11 @@ fast as possible" without blocking other visitors for more than one chunk at
 a time (see CLAUDE.md: single thread, single DB, single active instance).
 
 Structure: a run is `total_simulations` independent repeats. Every repeat
-starts fresh from the same `balance_initial` and plays out up to `max_epoch`
-epochs (trades) — stopping early only if it runs out of money. Once all
-repeats are done, they're ranked against each other by final balance.
+starts fresh from the same `balance_initial` and always plays out the full
+`max_epoch` epochs (trades) — balance is allowed to go negative and trading
+keeps going regardless (no stopping just because the account is underwater;
+that's the point of a risk-of-ruin style simulation). Once all repeats are
+done, they're ranked against each other by final balance.
 
 Per-epoch model. A real trade is either a buy (long) or a sell (short) —
 never both at once — so each epoch first picks a direction, then stakes that
@@ -19,19 +21,20 @@ charged every epoch regardless of direction. The pool closes back into
 balance the same epoch it opened (win or lose):
 
     direction = 'buy' or 'sell', 50/50
-    pool   = current_balance * (buy_pct if direction == 'buy' else sell_pct) / 100
+    pool   = abs(current_balance) * (buy_pct if direction == 'buy' else sell_pct) / 100
     win    = random() < profit_pct / (profit_pct + loss_pct)        # 50/50 if both 0
     payout_pct = uniform(min, max) if range toggle else the fixed number
     change = +pool * payout_pct / 100   (win)
              -pool * payout_pct / 100   (loss)
     cost   = pool * spread_pct / 100    (always subtracted)
-    balance = max(0, balance + change - cost)
+    balance = balance + change - cost    # can go negative — trading continues either way
 
 Since buy_pct and sell_pct are each capped at 100 in the UI and are never
-summed, a single epoch can never stake more than the full balance.
+summed, a single epoch never stakes more than 100% of the (possibly
+negative) current balance.
 
-A repeat stops early ("depleted") if balance hits 0, otherwise it runs until
-max_epoch is reached ("epoch_limit").
+A repeat always runs the full max_epoch epochs ("epoch_limit"); the only
+other way one ends is a manual stop of the whole run.
 """
 import random
 import sqlite3
@@ -158,7 +161,12 @@ def run_chunk(conn):
 
     while True:
         is_buy = rand() < 0.5
-        pool = balance * (buy_frac if is_buy else sell_frac)
+        # abs(): stake size tracks how much money is at risk, not its sign —
+        # otherwise a negative balance would make pool negative too and
+        # invert win/loss (a "loss" would pull balance back toward positive).
+        # Losses must always hurt and wins must always help, whichever side
+        # of zero the balance is on.
+        pool = abs(balance) * (buy_frac if is_buy else sell_frac)
         win = rand() < win_prob
         if win:
             payout = profit_min if profit_fixed else uniform(profit_min, profit_max)
@@ -167,9 +175,7 @@ def run_chunk(conn):
             payout = loss_min if loss_fixed else uniform(loss_min, loss_max)
             change = -pool * payout / 100
         cost = pool * spread_frac
-        balance = balance + change - cost
-        if balance < 0:
-            balance = 0.0
+        balance = balance + change - cost  # allowed to go negative; trading keeps going
 
         epoch += 1
         last_is_profit = 1 if win else 0
@@ -182,11 +188,7 @@ def run_chunk(conn):
         total_steps += 1
         since_check += 1
 
-        run_stop_reason = None
-        if balance <= 0:
-            run_stop_reason = 'depleted'
-        elif epoch >= max_epoch:
-            run_stop_reason = 'epoch_limit'
+        run_stop_reason = 'epoch_limit' if epoch >= max_epoch else None
 
         if run_stop_reason:
             completed_runs.append((run_no, balance, epoch, run_stop_reason))

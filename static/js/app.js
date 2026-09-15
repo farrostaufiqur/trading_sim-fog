@@ -41,6 +41,19 @@
         return Number(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     }
 
+    // Balance can go negative now (trading keeps running when underwater),
+    // so make the sign unmistakable: always show + or -, and color it.
+    function fmtSigned(n) {
+        if (n === null || n === undefined) return '—';
+        const s = fmt(n);
+        return Number(n) >= 0 ? '+' + s : s;
+    }
+
+    function signColor(n) {
+        if (n === null || n === undefined) return '';
+        return Number(n) >= 0 ? 'text-success' : 'text-danger';
+    }
+
     profitToggle.addEventListener('change', () => {
         profitFixed.classList.toggle('hidden', profitToggle.checked);
         profitRange.classList.toggle('hidden', !profitToggle.checked);
@@ -168,7 +181,7 @@
         const col = document.createElement('div');
         col.className = 'col-md col-6';
         const body = entry
-            ? `<span class="fs-5 fw-bold d-block">${fmt(entry.balance)}</span>` +
+            ? `<span class="fs-5 fw-bold d-block ${signColor(entry.balance)}">${fmtSigned(entry.balance)}</span>` +
               `<small class="text-muted d-block">rank ${entry.rank} of ${totalRuns} (simulation #${entry.run_no})</small>`
             : `<span class="fs-5 fw-bold d-block">—</span>`;
         col.innerHTML = `<div class="card metric-card"><div class="card-body py-2 px-3">` +
@@ -212,10 +225,13 @@
 
         mSimProgress.textContent = `${state.current_simulation} / ${state.total_simulations}`;
         mEpochProgress.textContent = `${state.current_epoch} / ${state.max_epoch}`;
-        mBalance.textContent = fmt(state.balance);
+        mBalance.textContent = fmtSigned(state.balance);
+        mBalance.className = 'fs-5 fw-bold ' + signColor(state.balance);
         mPool.textContent = fmt(state.pool);
-        mBest.textContent = fmt(state.best_balance);
-        mWorst.textContent = fmt(state.worst_balance);
+        mBest.textContent = fmtSigned(state.best_balance);
+        mBest.className = 'fs-5 fw-bold ' + signColor(state.best_balance);
+        mWorst.textContent = fmtSigned(state.worst_balance);
+        mWorst.className = 'fs-5 fw-bold ' + signColor(state.worst_balance);
         if (state.last_is_profit === null || state.last_is_profit === undefined) {
             mLast.textContent = '—';
             mLast.className = 'fs-5 fw-bold';
@@ -253,12 +269,21 @@
         if (!points || points.length < 2) return;
 
         const balances = points.map((p) => p.balance);
-        const minB = Math.min(balanceInitial, ...balances);
-        const maxB = Math.max(balanceInitial, ...balances);
-        const span = maxB - minB;
+        // Scale to where most points actually are (5th-95th percentile),
+        // not the true min/max — a single extreme spike would otherwise
+        // squash every other point into an unreadable sliver.
+        const sorted = [...balances].sort((a, b) => a - b);
+        const percentile = (p) => {
+            const idx = (sorted.length - 1) * p;
+            const i0 = Math.floor(idx), i1 = Math.ceil(idx);
+            return i0 === i1 ? sorted[i0] : sorted[i0] + (sorted[i1] - sorted[i0]) * (idx - i0);
+        };
+        let lo = Math.min(percentile(0.05), balanceInitial);
+        let hi = Math.max(percentile(0.95), balanceInitial);
+        const span = hi - lo;
         const pad = span > 0 ? span * 0.08 : 1;
-        const lo = minB - pad;
-        const hi = maxB + pad;
+        lo -= pad;
+        hi += pad;
 
         const w = rect.width;
         const h = rect.height;
@@ -274,6 +299,16 @@
         ctx.moveTo(0, baseY);
         ctx.lineTo(w, baseY);
         ctx.stroke();
+
+        // Zero line — the account can go negative now, so mark that threshold too.
+        if (lo < 0 && hi > 0) {
+            ctx.strokeStyle = 'rgba(255, 59, 59, 0.35)';
+            ctx.beginPath();
+            const zeroY = yAt(0);
+            ctx.moveTo(0, zeroY);
+            ctx.lineTo(w, zeroY);
+            ctx.stroke();
+        }
         ctx.setLineDash([]);
 
         const signOf = (b) => (b >= balanceInitial ? 1 : -1);
