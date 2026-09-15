@@ -9,7 +9,7 @@ a time (see CLAUDE.md: single thread, single DB, single active instance).
 Per-trade model (documented here since it isn't handed down by spec, and is
 the one part of this app easiest to retune):
 
-    position_size = current_balance * (buy_pct + sell_pct) / 100
+    position_size = current_balance * min(buy_pct + sell_pct, 100) / 100  # capped at 100% of balance
     win = random() < profit_pct / (profit_pct + loss_pct)   # 50/50 if both 0
     payout_pct = uniform(min, max) if range toggle else the fixed number
     change = +position_size * payout_pct / 100   (win)
@@ -106,7 +106,10 @@ def run_chunk(conn):
     rows = []
     steps = min(CHUNK_SIZE, total - trade_no)
     for _ in range(steps):
-        position_size = balance * (sim['buy_pct'] + sim['sell_pct']) / 100
+        # Capped at the full balance: buy% + sell% can add up past 100 (simultaneous
+        # buy+sell exposure), but a single trade should never be able to lose more
+        # than the balance itself.
+        position_size = balance * min(sim['buy_pct'] + sim['sell_pct'], 100) / 100
         win = random.random() < win_prob
         if win:
             payout = sim['profit_min'] if sim['profit_min'] == sim['profit_max'] else random.uniform(sim['profit_min'], sim['profit_max'])
