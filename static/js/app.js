@@ -220,7 +220,9 @@
             mLast.textContent = '—';
             mLast.className = 'fs-5 fw-bold';
         } else {
-            mLast.textContent = state.last_is_profit ? 'PROFIT' : 'LOSS';
+            const dir = state.last_direction ? 'BUY' : 'SELL';
+            const outcome = state.last_is_profit ? 'PROFIT' : 'LOSS';
+            mLast.textContent = `${dir} · ${outcome}`;
             mLast.className = 'fs-5 fw-bold ' + (state.last_is_profit ? 'text-success' : 'text-danger');
         }
 

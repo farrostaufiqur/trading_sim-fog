@@ -50,21 +50,29 @@
         <section id="setup-view" class="card">
             <div class="card-body">
                 <form id="setup-form">
+                    <div class="alert alert-info small mb-3">
+                        <i class="fas fa-circle-info me-1"></i>
+                        Each epoch is randomly either a <strong>buy</strong> (long) or a
+                        <strong>sell</strong> (short) trade — never both at once, like real
+                        trading. Whichever direction it is, that side's percentage of your
+                        current balance is staked; <strong>spread</strong> is the cost of the
+                        buy/sell price gap, charged every trade regardless of outcome.
+                    </div>
                     <div class="row g-3">
                         <div class="col-md-3 col-6">
                             <label class="form-label">Balance</label>
                             <input type="number" class="form-control" name="balance" step="0.01" min="0.01" value="1000" required>
                         </div>
                         <div class="col-md-3 col-6">
-                            <label class="form-label">Buy % <small class="text-muted">of balance</small></label>
+                            <label class="form-label">Buy % <small class="text-muted">position size when going long</small></label>
                             <input type="number" class="form-control" name="buy_pct" step="0.01" min="0" max="100" value="30" required>
                         </div>
                         <div class="col-md-3 col-6">
-                            <label class="form-label">Sell % <small class="text-muted">of balance</small></label>
+                            <label class="form-label">Sell % <small class="text-muted">position size when going short</small></label>
                             <input type="number" class="form-control" name="sell_pct" step="0.01" min="0" max="100" value="30" required>
                         </div>
                         <div class="col-md-3 col-6">
-                            <label class="form-label">Spread %</label>
+                            <label class="form-label">Spread % <small class="text-muted">buy/sell price gap, cost per trade</small></label>
                             <input type="number" class="form-control" name="spread_pct" step="0.001" min="0" value="0.05" required>
                         </div>
                         <div class="col-md-3 col-6">

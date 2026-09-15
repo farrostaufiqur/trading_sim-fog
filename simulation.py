@@ -11,17 +11,24 @@ starts fresh from the same `balance_initial` and plays out up to `max_epoch`
 epochs (trades) — stopping early only if it runs out of money. Once all
 repeats are done, they're ranked against each other by final balance.
 
-Per-epoch model — buy and sell both stake money into the pool, spread is the
-buy/sell price gap charged on the round trip, and the pool closes back into
-balance the same epoch (win or lose):
+Per-epoch model. A real trade is either a buy (long) or a sell (short) —
+never both at once — so each epoch first picks a direction, then stakes that
+direction's percentage of the current balance into the pool. Spread is the
+gap between the buy price and the sell price (the cost of a round trip),
+charged every epoch regardless of direction. The pool closes back into
+balance the same epoch it opened (win or lose):
 
-    pool   = current_balance * min(buy_pct + sell_pct, 100) / 100   # capped at 100% of balance
+    direction = 'buy' or 'sell', 50/50
+    pool   = current_balance * (buy_pct if direction == 'buy' else sell_pct) / 100
     win    = random() < profit_pct / (profit_pct + loss_pct)        # 50/50 if both 0
     payout_pct = uniform(min, max) if range toggle else the fixed number
     change = +pool * payout_pct / 100   (win)
              -pool * payout_pct / 100   (loss)
     cost   = pool * spread_pct / 100    (always subtracted)
     balance = max(0, balance + change - cost)
+
+Since buy_pct and sell_pct are each capped at 100 in the UI and are never
+summed, a single epoch can never stake more than the full balance.
 
 A repeat stops early ("depleted") if balance hits 0, otherwise it runs until
 max_epoch is reached ("epoch_limit").
@@ -30,7 +37,16 @@ import random
 import sqlite3
 import time
 
-CHUNK_SIZE = 500
+# A chunk is bounded by wall-clock time, not a fixed epoch count: with large
+# total_simulations x max_epoch (e.g. 100,000 x 1,000 = up to 10^8 epochs),
+# a fixed small chunk would mean hundreds of thousands of /api/tick round
+# trips — that's what actually times out, not the computation itself (pure
+# Python easily does 10^6+ simple epochs/sec). Budgeting each chunk to ~1s
+# of wall time keeps the server responsive to other viewers/Stop while still
+# needing only a couple hundred round trips for even the largest runs.
+CHUNK_TIME_BUDGET = 1.0
+CHUNK_CHECK_INTERVAL = 5000
+CHUNK_MAX_STEPS = 5_000_000
 
 
 def _row_to_dict(row):
@@ -80,7 +96,7 @@ def start(conn, cfg):
             total_simulations=?, max_epoch=?,
             current_simulation=1, current_epoch=0,
             balance=?, pool=0, best_balance=?, worst_balance=?,
-            last_is_profit=NULL, stop_reason=NULL,
+            last_is_profit=NULL, last_direction=NULL, stop_reason=NULL,
             created_at=?, finished_at=NULL
            WHERE id=1""",
         (
@@ -117,31 +133,54 @@ def run_chunk(conn):
     run_no = sim['current_simulation']
     total_runs = sim['total_simulations']
     last_is_profit = sim['last_is_profit']
+    last_direction = sim['last_direction']
     pool = sim['pool'] or 0.0
+
+    # Hoisted out of the loop — repeated sqlite3.Row string-key lookups are
+    # the single biggest avoidable cost at millions of iterations.
+    buy_frac = min(sim['buy_pct'], 100) / 100
+    sell_frac = min(sim['sell_pct'], 100) / 100
+    spread_frac = sim['spread_pct'] / 100
+    profit_min, profit_max = sim['profit_min'], sim['profit_max']
+    loss_min, loss_max = sim['loss_min'], sim['loss_max']
+    profit_fixed = profit_min == profit_max
+    loss_fixed = loss_min == loss_max
+    uniform = random.uniform
+    rand = random.random
 
     rows = []
     completed_runs = []  # (run_no, final_balance, epochs_used, stop_reason)
     overall_done = False
-    steps_budget = CHUNK_SIZE
 
-    while steps_budget > 0:
-        pool = balance * min(sim['buy_pct'] + sim['sell_pct'], 100) / 100
-        win = random.random() < win_prob
+    start_time = time.monotonic()
+    total_steps = 0
+    since_check = 0
+
+    while True:
+        is_buy = rand() < 0.5
+        pool = balance * (buy_frac if is_buy else sell_frac)
+        win = rand() < win_prob
         if win:
-            payout = sim['profit_min'] if sim['profit_min'] == sim['profit_max'] else random.uniform(sim['profit_min'], sim['profit_max'])
+            payout = profit_min if profit_fixed else uniform(profit_min, profit_max)
             change = pool * payout / 100
         else:
-            payout = sim['loss_min'] if sim['loss_min'] == sim['loss_max'] else random.uniform(sim['loss_min'], sim['loss_max'])
+            payout = loss_min if loss_fixed else uniform(loss_min, loss_max)
             change = -pool * payout / 100
-        cost = pool * sim['spread_pct'] / 100
-        balance = max(0.0, balance + change - cost)
+        cost = pool * spread_frac
+        balance = balance + change - cost
+        if balance < 0:
+            balance = 0.0
 
         epoch += 1
         last_is_profit = 1 if win else 0
-        best = max(best, balance)
-        worst = min(worst, balance)
+        last_direction = 1 if is_buy else 0
+        if balance > best:
+            best = balance
+        if balance < worst:
+            worst = balance
         rows.append((epoch, balance, last_is_profit))
-        steps_budget -= 1
+        total_steps += 1
+        since_check += 1
 
         run_stop_reason = None
         if balance <= 0:
@@ -154,10 +193,9 @@ def run_chunk(conn):
             if run_no >= total_runs:
                 overall_done = True
                 break
-            # start the next repeat fresh, same starting balance
-            if rows:
-                conn.executemany("INSERT INTO trade_point (trade_no, balance, is_profit) VALUES (?, ?, ?)", rows)
-                rows = []
+            # start the next repeat fresh, same starting balance — nothing
+            # from the repeat that just ended needs to survive in the chart
+            rows = []
             conn.execute("DELETE FROM trade_point")
             run_no += 1
             balance = balance_initial
@@ -166,28 +204,34 @@ def run_chunk(conn):
             best = balance_initial
             worst = balance_initial
             last_is_profit = None
+            last_direction = None
+
+        if since_check >= CHUNK_CHECK_INTERVAL:
+            since_check = 0
+            if total_steps >= CHUNK_MAX_STEPS or (time.monotonic() - start_time) >= CHUNK_TIME_BUDGET:
+                break
 
     if rows:
         conn.executemany("INSERT INTO trade_point (trade_no, balance, is_profit) VALUES (?, ?, ?)", rows)
 
-    for run in completed_runs:
-        conn.execute(
+    if completed_runs:
+        conn.executemany(
             "INSERT OR REPLACE INTO simulation_run (run_no, final_balance, epochs_used, stop_reason) VALUES (?, ?, ?, ?)",
-            run,
+            completed_runs,
         )
 
     if overall_done:
         conn.execute(
             """UPDATE simulation SET status='finished', current_simulation=?, current_epoch=?,
-               balance=?, pool=?, best_balance=?, worst_balance=?, last_is_profit=?,
+               balance=?, pool=?, best_balance=?, worst_balance=?, last_is_profit=?, last_direction=?,
                stop_reason='done', finished_at=? WHERE id=1""",
-            (run_no, epoch, balance, pool, best, worst, last_is_profit, time.strftime('%Y-%m-%d %H:%M:%S')),
+            (run_no, epoch, balance, pool, best, worst, last_is_profit, last_direction, time.strftime('%Y-%m-%d %H:%M:%S')),
         )
     else:
         conn.execute(
             """UPDATE simulation SET current_simulation=?, current_epoch=?, balance=?, pool=?,
-               best_balance=?, worst_balance=?, last_is_profit=? WHERE id=1""",
-            (run_no, epoch, balance, pool, best, worst, last_is_profit),
+               best_balance=?, worst_balance=?, last_is_profit=?, last_direction=? WHERE id=1""",
+            (run_no, epoch, balance, pool, best, worst, last_is_profit, last_direction),
         )
     conn.commit()
     return get_state(conn)
