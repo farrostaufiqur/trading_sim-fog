@@ -76,8 +76,12 @@
                             <input type="number" class="form-control" name="loss_pct" step="0.01" min="0" value="50" required>
                         </div>
                         <div class="col-md-3 col-6">
-                            <label class="form-label">Number of simulations</label>
-                            <input type="number" class="form-control" name="total_trades" step="1" min="1" value="500" required>
+                            <label class="form-label">Number of simulations <small class="text-muted">N independent repeats</small></label>
+                            <input type="number" class="form-control" name="total_simulations" step="1" min="1" value="100" required>
+                        </div>
+                        <div class="col-md-3 col-6">
+                            <label class="form-label">Max epoch <small class="text-muted">trade cap per simulation</small></label>
+                            <input type="number" class="form-control" name="max_epoch" step="1" min="1" value="100" required>
                         </div>
                     </div>
 
@@ -148,8 +152,16 @@
                     <div class="col-md col-6">
                         <div class="card metric-card">
                             <div class="card-body py-2 px-3">
-                                <small class="text-muted d-block">Progress</small>
-                                <span class="fs-5 fw-bold" id="m-progress">0 / 0</span>
+                                <small class="text-muted d-block">Simulation</small>
+                                <span class="fs-5 fw-bold" id="m-sim-progress">0 / 0</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md col-6">
+                        <div class="card metric-card">
+                            <div class="card-body py-2 px-3">
+                                <small class="text-muted d-block">Epoch</small>
+                                <span class="fs-5 fw-bold" id="m-epoch-progress">0 / 0</span>
                             </div>
                         </div>
                     </div>
@@ -164,7 +176,15 @@
                     <div class="col-md col-6">
                         <div class="card metric-card">
                             <div class="card-body py-2 px-3">
-                                <small class="text-muted d-block">Best so far</small>
+                                <small class="text-muted d-block">Pool</small>
+                                <span class="fs-5 fw-bold" id="m-pool">0</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md col-6">
+                        <div class="card metric-card">
+                            <div class="card-body py-2 px-3">
+                                <small class="text-muted d-block">Best epoch</small>
                                 <span class="fs-5 fw-bold" id="m-best">0</span>
                             </div>
                         </div>
@@ -172,7 +192,7 @@
                     <div class="col-md col-6">
                         <div class="card metric-card">
                             <div class="card-body py-2 px-3">
-                                <small class="text-muted d-block">Worst so far</small>
+                                <small class="text-muted d-block">Worst epoch</small>
                                 <span class="fs-5 fw-bold" id="m-worst">0</span>
                             </div>
                         </div>

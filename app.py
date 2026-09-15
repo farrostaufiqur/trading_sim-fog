@@ -24,7 +24,7 @@ def create_app():
         sim = simulation.get_state(conn)
         payload = dict(sim)
         payload['chart'] = simulation.chart_points(conn)
-        if sim['status'] in ('finished', 'stopped'):
+        if sim['status'] == 'finished':
             payload['stats'] = simulation.ranked_stats(conn)
         else:
             payload['stats'] = None

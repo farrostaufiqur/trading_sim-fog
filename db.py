@@ -13,7 +13,7 @@ DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'instance', '
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS simulation (
     id INTEGER PRIMARY KEY CHECK (id = 1),
-    status TEXT NOT NULL DEFAULT 'idle',        -- idle | running | finished | stopped
+    status TEXT NOT NULL DEFAULT 'idle',        -- idle | running | finished
 
     balance_initial REAL,
     buy_pct REAL,
@@ -27,23 +27,36 @@ CREATE TABLE IF NOT EXISTS simulation (
     loss_toggle INTEGER,
     loss_min REAL,
     loss_max REAL,
-    total_trades INTEGER,
+    total_simulations INTEGER,                  -- N independent repeats
+    max_epoch INTEGER,                           -- trade cap per repeat
 
-    current_trade INTEGER NOT NULL DEFAULT 0,
+    current_simulation INTEGER NOT NULL DEFAULT 0,  -- 1..total_simulations
+    current_epoch INTEGER NOT NULL DEFAULT 0,        -- 0..max_epoch, within the current repeat
     balance REAL,
-    best_balance REAL,
-    worst_balance REAL,
+    pool REAL,                                    -- money staked in the current/most recent epoch
+    best_balance REAL,                            -- best epoch balance within the current repeat
+    worst_balance REAL,                           -- worst epoch balance within the current repeat
     last_is_profit INTEGER,
-    stop_reason TEXT,                            -- null | 'depleted' | 'manual' | 'done'
+    stop_reason TEXT,                             -- null | 'depleted' | 'epoch_limit' | 'manual' | 'done'
 
     created_at TEXT,
     finished_at TEXT
 );
 
+-- One epoch-by-epoch balance point for the repeat currently in progress.
+-- Cleared and restarted at the beginning of every repeat.
 CREATE TABLE IF NOT EXISTS trade_point (
     trade_no INTEGER PRIMARY KEY,
     balance REAL NOT NULL,
     is_profit INTEGER NOT NULL
+);
+
+-- One row per completed repeat, used for the cross-simulation ranking.
+CREATE TABLE IF NOT EXISTS simulation_run (
+    run_no INTEGER PRIMARY KEY,
+    final_balance REAL NOT NULL,
+    epochs_used INTEGER NOT NULL,
+    stop_reason TEXT NOT NULL
 );
 """
 

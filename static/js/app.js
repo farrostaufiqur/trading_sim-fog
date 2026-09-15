@@ -16,8 +16,10 @@
     const lossRange = document.getElementById('loss-range');
 
     const configSummary = document.getElementById('config-summary');
-    const mProgress = document.getElementById('m-progress');
+    const mSimProgress = document.getElementById('m-sim-progress');
+    const mEpochProgress = document.getElementById('m-epoch-progress');
     const mBalance = document.getElementById('m-balance');
+    const mPool = document.getElementById('m-pool');
     const mBest = document.getElementById('m-best');
     const mWorst = document.getElementById('m-worst');
     const mLast = document.getElementById('m-last');
@@ -66,7 +68,8 @@
             spread_pct: fd.get('spread_pct'),
             profit_pct: fd.get('profit_pct'),
             loss_pct: fd.get('loss_pct'),
-            total_trades: fd.get('total_trades'),
+            total_simulations: fd.get('total_simulations'),
+            max_epoch: fd.get('max_epoch'),
             profit_toggle: fd.get('profit_toggle') === 'on',
             profit_amount: fd.get('profit_amount'),
             profit_min: fd.get('profit_min'),
@@ -153,19 +156,20 @@
             ['Loss % (weight)', fmt(s.loss_pct)],
             ['Profit amount', profitLabel],
             ['Loss amount', lossLabel],
-            ['Simulations', s.total_trades],
+            ['Simulations (N)', s.total_simulations],
+            ['Max epoch', s.max_epoch],
         ];
         for (const [label, value] of items) {
             configSummary.appendChild(configField(label, value));
         }
     }
 
-    function statBox(label, entry, totalTrades) {
+    function statBox(label, entry, totalRuns) {
         const col = document.createElement('div');
         col.className = 'col-md col-6';
         const body = entry
             ? `<span class="fs-5 fw-bold d-block">${fmt(entry.balance)}</span>` +
-              `<small class="text-muted d-block">rank ${entry.rank} of ${totalTrades} (trade #${entry.trade_no})</small>`
+              `<small class="text-muted d-block">rank ${entry.rank} of ${totalRuns} (simulation #${entry.run_no})</small>`
             : `<span class="fs-5 fw-bold d-block">—</span>`;
         col.innerHTML = `<div class="card metric-card"><div class="card-body py-2 px-3">` +
             `<small class="text-muted d-block">${label}</small>${body}</div></div>`;
@@ -206,8 +210,10 @@
         monitorView.classList.remove('hidden');
         renderConfigSummary(state);
 
-        mProgress.textContent = `${state.current_trade} / ${state.total_trades}`;
+        mSimProgress.textContent = `${state.current_simulation} / ${state.total_simulations}`;
+        mEpochProgress.textContent = `${state.current_epoch} / ${state.max_epoch}`;
         mBalance.textContent = fmt(state.balance);
+        mPool.textContent = fmt(state.pool);
         mBest.textContent = fmt(state.best_balance);
         mWorst.textContent = fmt(state.worst_balance);
         if (state.last_is_profit === null || state.last_is_profit === undefined) {
