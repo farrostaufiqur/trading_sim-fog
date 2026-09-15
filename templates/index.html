@@ -33,6 +33,10 @@
     <div class="header-container container-xxl">
         <header class="header navbar navbar-expand-sm expand-header">
             <div class="d-flex align-items-center gap-2">
+                <button type="button" class="btn btn-sm btn-outline-secondary rounded-circle help-btn"
+                        data-bs-toggle="modal" data-bs-target="#help-modal" title="Help" aria-label="Help">
+                    <i class="fas fa-exclamation"></i>
+                </button>
                 <i class="fas fa-chart-line"></i>
                 <span class="fw-semibold">Trading Simulator</span>
             </div>
@@ -50,18 +54,6 @@
         <section id="setup-view" class="card">
             <div class="card-body">
                 <form id="setup-form">
-                    <div class="alert alert-info small mb-3">
-                        <i class="fas fa-circle-info me-1"></i>
-                        Each epoch is randomly either a <strong>buy</strong> (long) or a
-                        <strong>sell</strong> (short) trade — never both at once, like real
-                        trading. Whichever direction it is, that side's percentage of your
-                        current balance is staked; <strong>spread</strong> is the cost of the
-                        buy/sell price gap, charged every trade regardless of outcome.
-                        <br>
-                        The defaults below reproduce the Kelly-optimal 33% bet size scenario
-                        (50/50 odds of +100%/-60%, 1,000 people, 100 rounds each) from the
-                        reference video — change any field to try your own numbers.
-                    </div>
                     <div class="row g-3">
                         <div class="col-md-3 col-6">
                             <label class="form-label">Balance</label>
@@ -233,6 +225,83 @@
             </div>
         </section>
 
+    </div>
+
+    <div class="modal fade" id="help-modal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-scrollable modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title"><i class="fas fa-circle-info me-2"></i>How this simulator works</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body help-body">
+
+                    <h6>Setup fields</h6>
+                    <dl class="row">
+                        <dt class="col-sm-4">Balance</dt>
+                        <dd class="col-sm-8">Starting cash for every simulation. Each of the N simulations restarts from this same amount.</dd>
+
+                        <dt class="col-sm-4">Buy %</dt>
+                        <dd class="col-sm-8">How much of your <em>current</em> balance is staked when an epoch happens to be a <strong>buy</strong> (long) trade. E.g. balance 1,000 and Buy % 33 → that trade stakes 330.</dd>
+
+                        <dt class="col-sm-4">Sell %</dt>
+                        <dd class="col-sm-8">Same as Buy %, but for a <strong>sell</strong> (short) trade. Each epoch is randomly one or the other, never both — set Buy % and Sell % to the same number to simulate a single instrument with one bet size (no long/short distinction).</dd>
+
+                        <dt class="col-sm-4">Spread %</dt>
+                        <dd class="col-sm-8">The buy/ask vs sell/bid price gap — a cost taken out of the staked amount on every trade, win or lose. Set to 0 to ignore trading costs.</dd>
+
+                        <dt class="col-sm-4">Profit % (weight)</dt>
+                        <dd class="col-sm-8">How likely a trade is a win. Compared against Loss % to get the win chance — e.g. Profit % 50 and Loss % 50 means a 50/50 coin flip; Profit % 70 and Loss % 30 means a 70% win rate.</dd>
+
+                        <dt class="col-sm-4">Loss % (weight)</dt>
+                        <dd class="col-sm-8">The counterpart to Profit % — how likely a trade is a loss.</dd>
+
+                        <dt class="col-sm-4">Profit amount / range</dt>
+                        <dd class="col-sm-8">The payout on a winning trade, as a % of the staked amount. 100 means the stake doubles. Turn on the range toggle to pick a random value between a min and max instead of a fixed number.</dd>
+
+                        <dt class="col-sm-4">Loss amount / range</dt>
+                        <dd class="col-sm-8">The cost of a losing trade, as a % of the staked amount. 60 means you lose 60% of what was staked on that trade. Same min/max range toggle as profit.</dd>
+
+                        <dt class="col-sm-4">Number of simulations</dt>
+                        <dd class="col-sm-8">How many independent, separate accounts (N) to run — like N different people all using the same strategy. Each one starts fresh from the same Balance.</dd>
+
+                        <dt class="col-sm-4">Max epoch</dt>
+                        <dd class="col-sm-8">How many trades each simulation makes before stopping. Balance can go negative and trading keeps going regardless — a simulation only stops early if you hit Stop.</dd>
+                    </dl>
+
+                    <h6 class="mt-4">While running / finished (monitor view)</h6>
+                    <dl class="row">
+                        <dt class="col-sm-4">Simulation x / N</dt>
+                        <dd class="col-sm-8">Which of the N independent simulations is currently in progress (or was the last one run).</dd>
+
+                        <dt class="col-sm-4">Epoch x / max</dt>
+                        <dd class="col-sm-8">How many trades into the current simulation you are.</dd>
+
+                        <dt class="col-sm-4">Balance</dt>
+                        <dd class="col-sm-8">The current simulation's live balance. Green when ≥ 0, red when negative.</dd>
+
+                        <dt class="col-sm-4">Pool</dt>
+                        <dd class="col-sm-8">The size of the most recent trade's stake, for visibility into how much was just risked. It's already folded into Balance the same epoch it happens — not separate money sitting on the side.</dd>
+
+                        <dt class="col-sm-4">Best epoch / Worst epoch</dt>
+                        <dd class="col-sm-8">The highest and lowest balance seen so far within the <em>current</em> simulation only (resets each time a new simulation starts).</dd>
+
+                        <dt class="col-sm-4">Last trade</dt>
+                        <dd class="col-sm-8">The direction (BUY/SELL) and outcome (PROFIT/LOSS) of the most recent trade.</dd>
+
+                        <dt class="col-sm-4">Chart</dt>
+                        <dd class="col-sm-8">The balance curve of the simulation currently in progress, one point per epoch. Bright green/red is the active streak (the run of trades leading to right now); dim green/red is older history within the same simulation. The dashed line is your starting balance; the red dashed line (when visible) is zero. The vertical scale focuses on where most points actually are (5th-95th percentile) so one extreme spike doesn't flatten everything else.</dd>
+
+                        <dt class="col-sm-4">Ranking (after all N finish)</dt>
+                        <dd class="col-sm-8">Every simulation's final balance, ranked best to worst: <strong>Most profitable</strong> (rank 1), <strong>Lowest still positive</strong> (the worst simulation that still ended ≥ 0), <strong>Middle (median)</strong>, <strong>Least negative</strong> (the best simulation that still ended below 0), and <strong>Most negative</strong> (rank N, the worst outcome).</dd>
+
+                        <dt class="col-sm-4">Start / Stop / Reset</dt>
+                        <dd class="col-sm-8">Start begins a run (or repeats the last config once finished). Stop ends the run early, keeping whatever simulations already completed. Reset clears everything and brings back the setup form.</dd>
+                    </dl>
+
+                </div>
+            </div>
+        </div>
     </div>
 
     <script src="/static/equation/plugins/global/vendors.min.js"></script>

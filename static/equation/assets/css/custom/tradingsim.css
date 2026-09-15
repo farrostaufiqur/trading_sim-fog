@@ -14,6 +14,19 @@ body.no-sidebar .header-container { padding-left: 0; }
 
 .metric-card .card-body { text-align: center; }
 
+.help-btn {
+    width: 30px;
+    height: 30px;
+    padding: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.help-body dt { font-weight: 600; }
+.help-body dd { margin-bottom: 0.9rem; }
+
 .chart-wrap {
     width: 100%;
     border-radius: 10px;
