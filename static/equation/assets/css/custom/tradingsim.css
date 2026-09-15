@@ -31,9 +31,9 @@ body.no-sidebar .header-container { padding-left: 0; }
     width: 100%;
     border-radius: 10px;
     overflow: hidden;
-    background: rgba(0, 0, 0, 0.15);
+    background: #000;
 }
-#chart { width: 100%; height: 340px; display: block; }
+#chart { width: 100%; height: 340px; display: block; background: #000; }
 
 @media (max-width: 480px) {
     #chart { height: 220px; }

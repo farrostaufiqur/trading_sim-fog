@@ -42,6 +42,8 @@
     let lastBalanceInitial = 0;
     let lastStatus = 'idle';
     let viewingReplay = null;
+    let backgroundLines = [];
+    let backgroundLoadedForStats = null;
 
     function fmt(n) {
         if (n === null || n === undefined) return '—';
@@ -260,8 +262,16 @@
         const finished = state.status === 'finished';
         rankViewControls.classList.toggle('hidden', !finished);
         if (finished) rankViewInput.max = state.total_simulations;
-        if (!finished) exitReplayView();
-        if (!viewingReplay) drawChart(lastChart, lastBalanceInitial, state.status);
+        if (!finished) {
+            exitReplayView();
+            backgroundLines = [];
+            backgroundLoadedForStats = null;
+        }
+
+        if (finished && state.stats) {
+            loadBackgroundLines(state.stats); // async; redraws itself once loaded
+        }
+        if (!viewingReplay) redrawChart(lastChart, lastBalanceInitial);
     }
 
     function exitReplayView() {
@@ -270,13 +280,32 @@
         rankViewLabel.textContent = '';
     }
 
-    rankViewBtn.addEventListener('click', async () => {
-        const rank = parseInt(rankViewInput.value, 10);
-        if (!rank || rank < 1) return;
+    async function fetchReplay(rank) {
         const res = await fetch(`/api/replay?rank=${rank}`);
         const data = await res.json();
-        if (!res.ok) {
-            rankViewLabel.textContent = data.error || 'Could not load that rank.';
+        return res.ok ? data : null;
+    }
+
+    async function loadBackgroundLines(stats) {
+        const key = `${stats.total}:${stats.best?.run_no}:${stats.worst?.run_no}`;
+        if (backgroundLoadedForStats === key) return;
+        backgroundLoadedForStats = key;
+
+        const ranks = new Set();
+        for (const entry of [stats.best, stats.profit_bottom, stats.median, stats.loss_top, stats.worst]) {
+            if (entry) ranks.add(entry.rank);
+        }
+        const results = await Promise.all([...ranks].map(fetchReplay));
+        backgroundLines = results.filter(Boolean).map((d) => ({ points: d.points }));
+        if (!viewingReplay) redrawChart(lastChart, lastBalanceInitial);
+    }
+
+    async function viewRank() {
+        const rank = parseInt(rankViewInput.value, 10);
+        if (!rank || rank < 1) return;
+        const data = await fetchReplay(rank);
+        if (!data) {
+            rankViewLabel.textContent = 'Could not load that rank.';
             rankViewLabel.className = 'text-danger small ms-2';
             return;
         }
@@ -285,35 +314,74 @@
         rankViewLabel.textContent =
             `Simulation #${data.run_no} — rank ${data.rank} of ${data.total} — final balance ${fmtSigned(data.final_balance)}`;
         rankViewBackBtn.classList.remove('hidden');
-        drawChart(data.points, data.balance_initial, 'finished');
+        redrawChart(data.points, data.balance_initial);
+    }
+
+    rankViewBtn.addEventListener('click', viewRank);
+    rankViewInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            viewRank();
+        }
     });
 
     rankViewBackBtn.addEventListener('click', () => {
         exitReplayView();
-        drawChart(lastChart, lastBalanceInitial, lastStatus);
+        redrawChart(lastChart, lastBalanceInitial);
     });
 
-    const COLOR_GREEN_BRIGHT = '#16f06a';
-    const COLOR_GREEN_DIM = 'rgba(22, 240, 106, 0.28)';
-    const COLOR_RED_BRIGHT = '#ff3b3b';
-    const COLOR_RED_DIM = 'rgba(255, 59, 59, 0.28)';
+    // Redraws with whatever background lines are currently loaded — the one
+    // shared entry point so background/foreground never fall out of sync.
+    function redrawChart(primaryPoints, balanceInitial) {
+        drawChart(primaryPoints, balanceInitial, backgroundLines);
+    }
 
-    function drawChart(points, balanceInitial, status) {
+    const COLOR_GREEN_BRIGHT = '#16f06a';
+    const COLOR_RED_BRIGHT = '#ff3b3b';
+    const DIM_ALPHA = 0.22;
+
+    function withAlpha(hex, alpha) {
+        const n = parseInt(hex.slice(1), 16);
+        return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${alpha})`;
+    }
+
+    // Draws one line: green where it rose from the previous point, red where
+    // it fell. `alpha < 1` renders the whole line dimmed (a background/other
+    // simulation); alpha 1 is the bright, currently-selected one.
+    function drawLine(ctx, points, xAt, yAt, alpha) {
+        const green = alpha >= 1 ? COLOR_GREEN_BRIGHT : withAlpha(COLOR_GREEN_BRIGHT, alpha);
+        const red = alpha >= 1 ? COLOR_RED_BRIGHT : withAlpha(COLOR_RED_BRIGHT, alpha);
+        ctx.lineWidth = alpha >= 1 ? 2.2 : 1.3;
+        for (let i = 1; i < points.length; i++) {
+            ctx.strokeStyle = points[i].balance >= points[i - 1].balance ? green : red;
+            ctx.beginPath();
+            ctx.moveTo(xAt(i - 1), yAt(points[i - 1].balance));
+            ctx.lineTo(xAt(i), yAt(points[i].balance));
+            ctx.stroke();
+        }
+    }
+
+    // `background` is an array of { points } for other simulations, drawn
+    // dimmed underneath; `points` (the primary/selected one) is drawn bright
+    // on top last.
+    function drawChart(points, balanceInitial, background) {
         const ctx = chartCanvas.getContext('2d');
         const dpr = window.devicePixelRatio || 1;
         const rect = chartCanvas.getBoundingClientRect();
         chartCanvas.width = Math.max(1, rect.width * dpr);
         chartCanvas.height = Math.max(1, rect.height * dpr);
         ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-        ctx.clearRect(0, 0, rect.width, rect.height);
+        ctx.fillStyle = '#000';
+        ctx.fillRect(0, 0, rect.width, rect.height);
 
-        if (!points || points.length < 2) return;
+        const lines = (background || []).map((b) => b.points).concat(points && points.length > 1 ? [points] : []);
+        if (lines.length === 0) return;
 
-        const balances = points.map((p) => p.balance);
+        const allBalances = lines.flat().map((p) => p.balance);
         // Scale to where most points actually are (5th-95th percentile),
         // not the true min/max — a single extreme spike would otherwise
         // squash every other point into an unreadable sliver.
-        const sorted = [...balances].sort((a, b) => a - b);
+        const sorted = allBalances.slice().sort((a, b) => a - b);
         const percentile = (p) => {
             const idx = (sorted.length - 1) * p;
             const i0 = Math.floor(idx), i1 = Math.ceil(idx);
@@ -328,8 +396,8 @@
 
         const w = rect.width;
         const h = rect.height;
-        const n = points.length;
-        const xAt = (i) => (n === 1 ? w / 2 : (i / (n - 1)) * w);
+        const maxLen = Math.max(...lines.map((l) => l.length));
+        const xAt = (i) => (maxLen === 1 ? w / 2 : (i / (maxLen - 1)) * w);
         const yAt = (b) => h - ((b - lo) / (hi - lo)) * h;
 
         ctx.strokeStyle = 'rgba(255,255,255,0.18)';
@@ -343,7 +411,7 @@
 
         // Zero line — the account can go negative now, so mark that threshold too.
         if (lo < 0 && hi > 0) {
-            ctx.strokeStyle = 'rgba(255, 59, 59, 0.35)';
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.35)';
             ctx.beginPath();
             const zeroY = yAt(0);
             ctx.moveTo(0, zeroY);
@@ -352,35 +420,17 @@
         }
         ctx.setLineDash([]);
 
-        const signOf = (b) => (b >= balanceInitial ? 1 : -1);
-
-        let activeFromIndex = n;
-        if (status === 'running') {
-            const lastSign = signOf(balances[n - 1]);
-            let i = n - 1;
-            while (i > 0 && signOf(balances[i - 1]) === lastSign) i--;
-            activeFromIndex = i;
+        for (const bg of background || []) {
+            if (bg.points.length > 1) drawLine(ctx, bg.points, xAt, yAt, DIM_ALPHA);
         }
-
-        ctx.lineWidth = 2.2;
-        for (let i = 1; i < n; i++) {
-            const sign = signOf(balances[i]);
-            const active = (i - 1) >= activeFromIndex;
-            ctx.strokeStyle = sign > 0
-                ? (active ? COLOR_GREEN_BRIGHT : COLOR_GREEN_DIM)
-                : (active ? COLOR_RED_BRIGHT : COLOR_RED_DIM);
-            ctx.beginPath();
-            ctx.moveTo(xAt(i - 1), yAt(balances[i - 1]));
-            ctx.lineTo(xAt(i), yAt(balances[i]));
-            ctx.stroke();
-        }
+        if (points && points.length > 1) drawLine(ctx, points, xAt, yAt, 1);
     }
 
     window.addEventListener('resize', () => {
         if (viewingReplay) {
-            drawChart(viewingReplay.points, viewingReplay.balance_initial, 'finished');
+            redrawChart(viewingReplay.points, viewingReplay.balance_initial);
         } else if (lastChart.length) {
-            drawChart(lastChart, lastBalanceInitial, lastStatus);
+            redrawChart(lastChart, lastBalanceInitial);
         }
     });
 
