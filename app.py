@@ -64,6 +64,29 @@ def create_app():
                 payload['stats'] = simulation.ranked_stats(conn)
         return jsonify(payload)
 
+    @app.route('/api/replay')
+    def api_replay():
+        conn = db.get_conn()
+        sim = simulation.get_state(conn)
+        if sim['status'] != 'finished':
+            return jsonify({'error': 'No finished run to view yet'}), 400
+        try:
+            rank = int(request.args.get('rank', ''))
+        except (TypeError, ValueError):
+            return jsonify({'error': 'rank must be a whole number'}), 400
+        r = simulation.rank_to_run(conn, rank)
+        if not r:
+            total = conn.execute("SELECT COUNT(*) c FROM simulation_run").fetchone()['c']
+            return jsonify({'error': f'Rank must be between 1 and {total}'}), 400
+        run_no, _ = r
+        try:
+            result = simulation.replay_run(conn, run_no)
+        except ValueError as exc:
+            return jsonify({'error': str(exc)}), 400
+        result['rank'] = rank
+        result['total'] = sim['total_simulations']
+        return jsonify(result)
+
     @app.route('/api/stop', methods=['POST'])
     def api_stop():
         conn = db.get_conn()

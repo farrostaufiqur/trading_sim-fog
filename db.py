@@ -37,6 +37,8 @@ CREATE TABLE IF NOT EXISTS simulation (
     loss_max REAL,
     total_simulations INTEGER,                  -- N independent repeats
     max_epoch INTEGER,                           -- trade cap per repeat
+    base_seed INTEGER,                          -- lets any run_no's epoch history be replayed on demand
+    rng_state BLOB,                             -- pickled state of the in-progress repeat's RNG (resumes correctly across chunks)
 
     current_simulation INTEGER NOT NULL DEFAULT 0,  -- 1..total_simulations
     current_epoch INTEGER NOT NULL DEFAULT 0,        -- 0..max_epoch, within the current repeat
@@ -79,6 +81,22 @@ calc_lock = threading.Lock()
 
 _local = threading.local()
 
+# Columns added after the table already existed on the live instance —
+# CREATE TABLE IF NOT EXISTS doesn't retrofit an existing table, so new
+# columns need an explicit ALTER TABLE (same pattern as smaalbayan: check
+# PRAGMA table_info, add whatever's missing).
+_MIGRATIONS = [
+    ("simulation", "base_seed", "INTEGER"),
+    ("simulation", "rng_state", "BLOB"),
+]
+
+
+def _migrate(conn):
+    for table, column, coltype in _MIGRATIONS:
+        cols = {row['name'] for row in conn.execute(f"PRAGMA table_info({table})")}
+        if column not in cols:
+            conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {coltype}")
+
 
 def get_conn():
     conn = getattr(_local, 'conn', None)
@@ -89,6 +107,7 @@ def get_conn():
         conn.execute("PRAGMA journal_mode=WAL")
         conn.execute("PRAGMA busy_timeout=30000")
         conn.executescript(SCHEMA)
+        _migrate(conn)
         conn.execute("INSERT OR IGNORE INTO simulation (id, status) VALUES (1, 'idle')")
         conn.commit()
         _local.conn = conn

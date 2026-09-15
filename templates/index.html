@@ -211,6 +211,16 @@
                     </div>
                 </div>
 
+                <div class="d-flex flex-wrap align-items-end gap-2 mb-2 hidden" id="rank-view-controls">
+                    <div>
+                        <label class="form-label mb-1">View rank</label>
+                        <input type="number" class="form-control form-control-sm" id="rank-view-input" min="1" step="1" style="width: 100px">
+                    </div>
+                    <button type="button" class="btn btn-sm btn-outline-primary" id="rank-view-btn">View</button>
+                    <button type="button" class="btn btn-sm btn-outline-secondary hidden" id="rank-view-back-btn">Back to latest</button>
+                    <span class="text-muted small ms-2" id="rank-view-label"></span>
+                </div>
+
                 <div class="chart-wrap mb-3">
                     <canvas id="chart"></canvas>
                 </div>
@@ -294,6 +304,9 @@
 
                         <dt class="col-sm-4">Ranking (after all N finish)</dt>
                         <dd class="col-sm-8">Every simulation's final balance, ranked best to worst: <strong>Most profitable</strong> (rank 1), <strong>Lowest still positive</strong> (the worst simulation that still ended ≥ 0), <strong>Middle (median)</strong>, <strong>Least negative</strong> (the best simulation that still ended below 0), and <strong>Most negative</strong> (rank N, the worst outcome).</dd>
+
+                        <dt class="col-sm-4">View rank</dt>
+                        <dd class="col-sm-8">Once finished, enter any rank (1 to N) and click View to see that specific simulation's own epoch-by-epoch chart and final balance, instead of only the last one run. "Back to latest" returns to the default view.</dd>
 
                         <dt class="col-sm-4">Start / Stop / Reset</dt>
                         <dd class="col-sm-8">Start begins a run (or repeats the last config once finished). Stop ends the run early, keeping whatever simulations already completed. Reset clears everything and brings back the setup form.</dd>

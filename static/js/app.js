@@ -30,11 +30,18 @@
     const mStopBtn = document.getElementById('m-stop-btn');
     const mResetBtn = document.getElementById('m-reset-btn');
 
+    const rankViewControls = document.getElementById('rank-view-controls');
+    const rankViewInput = document.getElementById('rank-view-input');
+    const rankViewBtn = document.getElementById('rank-view-btn');
+    const rankViewBackBtn = document.getElementById('rank-view-back-btn');
+    const rankViewLabel = document.getElementById('rank-view-label');
+
     let looping = false;
     let lastConfig = null;
     let lastChart = [];
     let lastBalanceInitial = 0;
     let lastStatus = 'idle';
+    let viewingReplay = null;
 
     function fmt(n) {
         if (n === null || n === undefined) return '—';
@@ -249,8 +256,42 @@
         mResetBtn.classList.toggle('hidden', running);
 
         renderStats(state.stats);
-        drawChart(lastChart, lastBalanceInitial, state.status);
+
+        const finished = state.status === 'finished';
+        rankViewControls.classList.toggle('hidden', !finished);
+        if (finished) rankViewInput.max = state.total_simulations;
+        if (!finished) exitReplayView();
+        if (!viewingReplay) drawChart(lastChart, lastBalanceInitial, state.status);
     }
+
+    function exitReplayView() {
+        viewingReplay = null;
+        rankViewBackBtn.classList.add('hidden');
+        rankViewLabel.textContent = '';
+    }
+
+    rankViewBtn.addEventListener('click', async () => {
+        const rank = parseInt(rankViewInput.value, 10);
+        if (!rank || rank < 1) return;
+        const res = await fetch(`/api/replay?rank=${rank}`);
+        const data = await res.json();
+        if (!res.ok) {
+            rankViewLabel.textContent = data.error || 'Could not load that rank.';
+            rankViewLabel.className = 'text-danger small ms-2';
+            return;
+        }
+        viewingReplay = data;
+        rankViewLabel.className = 'text-muted small ms-2';
+        rankViewLabel.textContent =
+            `Simulation #${data.run_no} — rank ${data.rank} of ${data.total} — final balance ${fmtSigned(data.final_balance)}`;
+        rankViewBackBtn.classList.remove('hidden');
+        drawChart(data.points, data.balance_initial, 'finished');
+    });
+
+    rankViewBackBtn.addEventListener('click', () => {
+        exitReplayView();
+        drawChart(lastChart, lastBalanceInitial, lastStatus);
+    });
 
     const COLOR_GREEN_BRIGHT = '#16f06a';
     const COLOR_GREEN_DIM = 'rgba(22, 240, 106, 0.28)';
@@ -336,7 +377,11 @@
     }
 
     window.addEventListener('resize', () => {
-        if (lastChart.length) drawChart(lastChart, lastBalanceInitial, lastStatus);
+        if (viewingReplay) {
+            drawChart(viewingReplay.points, viewingReplay.balance_initial, 'finished');
+        } else if (lastChart.length) {
+            drawChart(lastChart, lastBalanceInitial, lastStatus);
+        }
     });
 
     async function poll() {

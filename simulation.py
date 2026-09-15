@@ -36,8 +36,8 @@ negative) current balance.
 A repeat always runs the full max_epoch epochs ("epoch_limit"); the only
 other way one ends is a manual stop of the whole run.
 """
+import pickle
 import random
-import sqlite3
 import time
 
 # A chunk is bounded by wall-clock time, not a fixed epoch count: with large
@@ -56,8 +56,20 @@ def _row_to_dict(row):
     return dict(row) if row else None
 
 
-def get_state(conn):
+def _get_full_state(conn):
+    """Includes rng_state — internal engine use only (run_chunk/replay_run).
+    Never hand this to jsonify(); rng_state is a pickled BLOB."""
     return _row_to_dict(conn.execute("SELECT * FROM simulation WHERE id = 1").fetchone())
+
+
+def get_state(conn):
+    # rng_state is a pickled BLOB (internal engine state, not JSON-safe) —
+    # every caller of get_state ends up handing this straight to jsonify(),
+    # so it never belongs in the returned dict.
+    state = _get_full_state(conn)
+    if state is not None:
+        state.pop('rng_state', None)
+    return state
 
 
 def start(conn, cfg):
@@ -88,6 +100,12 @@ def start(conn, cfg):
 
     balance_initial = float(cfg['balance'])
 
+    # Each repeat's randomness is seeded from base_seed + run_no (see
+    # _rng_for_run below) — that's what lets any run_no's epoch history be
+    # replayed later, on demand, without having stored it.
+    base_seed = random.randrange(2**31)
+    rng_state = pickle.dumps(_rng_for_run(base_seed, 1).getstate())
+
     conn.execute("DELETE FROM trade_point")
     conn.execute("DELETE FROM simulation_run")
     conn.execute(
@@ -96,7 +114,7 @@ def start(conn, cfg):
             balance_initial=?, buy_pct=?, sell_pct=?, spread_pct=?,
             profit_pct=?, profit_toggle=?, profit_min=?, profit_max=?,
             loss_pct=?, loss_toggle=?, loss_min=?, loss_max=?,
-            total_simulations=?, max_epoch=?,
+            total_simulations=?, max_epoch=?, base_seed=?, rng_state=?,
             current_simulation=1, current_epoch=0,
             balance=?, pool=0, best_balance=?, worst_balance=?,
             last_is_profit=NULL, last_direction=NULL, stop_reason=NULL,
@@ -106,7 +124,7 @@ def start(conn, cfg):
             balance_initial, float(cfg['buy_pct']), float(cfg['sell_pct']), float(cfg['spread_pct']),
             float(cfg['profit_pct']), profit_toggle, profit_min, profit_max,
             float(cfg['loss_pct']), loss_toggle, loss_min, loss_max,
-            total_simulations, max_epoch,
+            total_simulations, max_epoch, base_seed, rng_state,
             balance_initial, balance_initial, balance_initial,
             time.strftime('%Y-%m-%d %H:%M:%S'),
         ),
@@ -115,10 +133,14 @@ def start(conn, cfg):
     return get_state(conn)
 
 
+def _rng_for_run(base_seed, run_no):
+    return random.Random(base_seed + run_no)
+
+
 def run_chunk(conn):
     """Advance up to CHUNK_SIZE epochs, possibly rolling across several
     repeats if max_epoch is small. No-op if not running."""
-    sim = get_state(conn)
+    sim = _get_full_state(conn)
     if sim['status'] != 'running':
         return sim
 
@@ -148,8 +170,11 @@ def run_chunk(conn):
     loss_min, loss_max = sim['loss_min'], sim['loss_max']
     profit_fixed = profit_min == profit_max
     loss_fixed = loss_min == loss_max
-    uniform = random.uniform
-    rand = random.random
+
+    rng = random.Random()
+    rng.setstate(pickle.loads(sim['rng_state']))
+    uniform = rng.uniform
+    rand = rng.random
 
     rows = []
     completed_runs = []  # (run_no, final_balance, epochs_used, stop_reason)
@@ -201,6 +226,7 @@ def run_chunk(conn):
             rows = []
             conn.execute("DELETE FROM trade_point")
             run_no += 1
+            rng.seed(sim['base_seed'] + run_no)  # in-place — rand/uniform stay bound to this rng
             balance = balance_initial
             pool = 0.0
             epoch = 0
@@ -223,18 +249,20 @@ def run_chunk(conn):
             completed_runs,
         )
 
+    rng_state = pickle.dumps(rng.getstate())
+
     if overall_done:
         conn.execute(
             """UPDATE simulation SET status='finished', current_simulation=?, current_epoch=?,
                balance=?, pool=?, best_balance=?, worst_balance=?, last_is_profit=?, last_direction=?,
-               stop_reason='done', finished_at=? WHERE id=1""",
-            (run_no, epoch, balance, pool, best, worst, last_is_profit, last_direction, time.strftime('%Y-%m-%d %H:%M:%S')),
+               rng_state=?, stop_reason='done', finished_at=? WHERE id=1""",
+            (run_no, epoch, balance, pool, best, worst, last_is_profit, last_direction, rng_state, time.strftime('%Y-%m-%d %H:%M:%S')),
         )
     else:
         conn.execute(
             """UPDATE simulation SET current_simulation=?, current_epoch=?, balance=?, pool=?,
-               best_balance=?, worst_balance=?, last_is_profit=?, last_direction=? WHERE id=1""",
-            (run_no, epoch, balance, pool, best, worst, last_is_profit, last_direction),
+               best_balance=?, worst_balance=?, last_is_profit=?, last_direction=?, rng_state=? WHERE id=1""",
+            (run_no, epoch, balance, pool, best, worst, last_is_profit, last_direction, rng_state),
         )
     conn.commit()
     return get_state(conn)
@@ -309,11 +337,8 @@ def ranked_stats(conn):
     balance_initial = conn.execute("SELECT balance_initial FROM simulation WHERE id=1").fetchone()['balance_initial']
 
     def at_rank(rank):
-        row = conn.execute(
-            "SELECT run_no, final_balance FROM simulation_run ORDER BY final_balance DESC, run_no ASC LIMIT 1 OFFSET ?",
-            (rank - 1,),
-        ).fetchone()
-        return {'rank': rank, 'balance': row['final_balance'], 'run_no': row['run_no']} if row else None
+        r = rank_to_run(conn, rank)
+        return {'rank': rank, 'balance': r[1], 'run_no': r[0]} if r else None
 
     best = at_rank(1)
     worst = at_rank(total)
@@ -336,3 +361,82 @@ def ranked_stats(conn):
         'worst': worst,
         'balance_initial': balance_initial,
     }
+
+
+def rank_to_run(conn, rank):
+    """(run_no, final_balance) for the given 1-based rank, best to worst, or None."""
+    row = conn.execute(
+        "SELECT run_no, final_balance FROM simulation_run ORDER BY final_balance DESC, run_no ASC LIMIT 1 OFFSET ?",
+        (rank - 1,),
+    ).fetchone()
+    return (row['run_no'], row['final_balance']) if row else None
+
+
+def replay_run(conn, run_no):
+    """Recompute one specific repeat's full epoch-by-epoch balance history
+    on demand. Nothing extra needs to be stored for this: every repeat's
+    epochs are fully determined by (base_seed, run_no, config), the same way
+    run_chunk generates them the first time — see _rng_for_run."""
+    sim = get_state(conn)
+    total_runs = sim['total_simulations']
+    if not total_runs or run_no < 1 or run_no > total_runs:
+        raise ValueError(f'Simulation number must be between 1 and {total_runs or 0}')
+    if sim['base_seed'] is None:
+        raise ValueError('This run predates the replay feature — start a new run to use it')
+
+    win_prob = 0.5
+    total_pct = sim['profit_pct'] + sim['loss_pct']
+    if total_pct > 0:
+        win_prob = sim['profit_pct'] / total_pct
+
+    buy_frac = min(sim['buy_pct'], 100) / 100
+    sell_frac = min(sim['sell_pct'], 100) / 100
+    spread_frac = sim['spread_pct'] / 100
+    profit_min, profit_max = sim['profit_min'], sim['profit_max']
+    loss_min, loss_max = sim['loss_min'], sim['loss_max']
+    profit_fixed = profit_min == profit_max
+    loss_fixed = loss_min == loss_max
+
+    rng = _rng_for_run(sim['base_seed'], run_no)
+    rand = rng.random
+    uniform = rng.uniform
+
+    balance = sim['balance_initial']
+    points = []
+    for epoch in range(1, sim['max_epoch'] + 1):
+        is_buy = rand() < 0.5
+        pool = abs(balance) * (buy_frac if is_buy else sell_frac)
+        win = rand() < win_prob
+        if win:
+            payout = profit_min if profit_fixed else uniform(profit_min, profit_max)
+            change = pool * payout / 100
+        else:
+            payout = loss_min if loss_fixed else uniform(loss_min, loss_max)
+            change = -pool * payout / 100
+        cost = pool * spread_frac
+        balance = balance + change - cost
+        points.append({'trade_no': epoch, 'balance': balance, 'is_profit': 1 if win else 0})
+
+    return {
+        'run_no': run_no,
+        'final_balance': balance,
+        'balance_initial': sim['balance_initial'],
+        'points': _downsample(points),
+    }
+
+
+def _downsample(points, max_points=800):
+    total = len(points)
+    if total <= max_points:
+        return points
+    step = total / max_points
+    out = []
+    last_idx = -1
+    for i in range(max_points):
+        idx = int(i * step)
+        if idx != last_idx:
+            out.append(points[idx])
+            last_idx = idx
+    if points[-1]['trade_no'] != out[-1]['trade_no']:
+        out.append(points[-1])
+    return out
