@@ -13,6 +13,10 @@ import simulation
 
 def create_app():
     app = Flask(__name__)
+    # This app is under active development — a long browser cache on
+    # static/ (Flask's default) has already caused a stale app.js to send
+    # field names the backend no longer recognizes. Keep it uncached.
+    app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 0
 
     @app.route('/')
     def index():
