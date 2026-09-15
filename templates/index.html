@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, shrink-to-fit=no">
+    <title>Trading Simulator</title>
+
+    <link href="/static/equation/layouts/vertical-dark-menu/css/light/loader.css" rel="stylesheet">
+    <link href="/static/equation/layouts/vertical-dark-menu/css/dark/loader.css" rel="stylesheet">
+    <script src="/static/equation/layouts/vertical-dark-menu/loader.js"></script>
+
+    <link href="/static/equation/bootstrap/css/bootstrap.min.css" rel="stylesheet">
+    <link href="/static/equation/layouts/vertical-dark-menu/css/light/plugins.css" rel="stylesheet">
+    <link href="/static/equation/layouts/vertical-dark-menu/css/dark/plugins.css" rel="stylesheet">
+
+    <link href="/static/equation/css/satoshi.css" rel="stylesheet">
+    <link href="/static/equation/fontawesome/css/all.min.css" rel="stylesheet">
+    <link href="/static/equation/theme-vars.css" rel="stylesheet">
+    <link href="/static/equation/assets/css/custom/tradingsim.css" rel="stylesheet">
+</head>
+<body class="layout-boxed no-sidebar" page="tradingsim">
+
+    <div id="load_screen">
+        <div class="loader"><div class="loader-content">
+            <div class="spinner-grow align-self-center"></div>
+        </div></div>
+    </div>
+
+    {# Hidden stub required by app.js themeToggle — do not remove #}
+    <button class="theme-toggle" style="display:none;" aria-hidden="true" tabindex="-1"></button>
+
+    <div class="header-container container-xxl">
+        <header class="header navbar navbar-expand-sm expand-header">
+            <div class="d-flex align-items-center gap-2">
+                <i class="fas fa-chart-line"></i>
+                <span class="fw-semibold">Trading Simulator</span>
+            </div>
+            <ul class="navbar-item flex-row ms-lg-auto ms-0">
+                <li class="nav-item d-flex align-items-center">
+                    <span id="status-badge" class="badge rounded-pill text-bg-secondary">idle</span>
+                </li>
+            </ul>
+        </header>
+    </div>
+
+    <div class="container-xxl py-4 mt-5 pt-4">
+
+        <!-- Setup form: only shown while no simulation exists yet -->
+        <section id="setup-view" class="card">
+            <div class="card-body">
+                <form id="setup-form">
+                    <div class="row g-3">
+                        <div class="col-md-3 col-6">
+                            <label class="form-label">Balance</label>
+                            <input type="number" class="form-control" name="balance" step="0.01" min="0.01" value="1000" required>
+                        </div>
+                        <div class="col-md-3 col-6">
+                            <label class="form-label">Buy % <small class="text-muted">of balance</small></label>
+                            <input type="number" class="form-control" name="buy_pct" step="0.01" min="0" max="100" value="30" required>
+                        </div>
+                        <div class="col-md-3 col-6">
+                            <label class="form-label">Sell % <small class="text-muted">of balance</small></label>
+                            <input type="number" class="form-control" name="sell_pct" step="0.01" min="0" max="100" value="30" required>
+                        </div>
+                        <div class="col-md-3 col-6">
+                            <label class="form-label">Spread %</label>
+                            <input type="number" class="form-control" name="spread_pct" step="0.001" min="0" value="0.05" required>
+                        </div>
+                        <div class="col-md-3 col-6">
+                            <label class="form-label">Profit % <small class="text-muted">win weight</small></label>
+                            <input type="number" class="form-control" name="profit_pct" step="0.01" min="0" value="50" required>
+                        </div>
+                        <div class="col-md-3 col-6">
+                            <label class="form-label">Loss % <small class="text-muted">loss weight</small></label>
+                            <input type="number" class="form-control" name="loss_pct" step="0.01" min="0" value="50" required>
+                        </div>
+                        <div class="col-md-3 col-6">
+                            <label class="form-label">Number of simulations</label>
+                            <input type="number" class="form-control" name="total_trades" step="1" min="1" value="500" required>
+                        </div>
+                    </div>
+
+                    <hr class="my-4">
+
+                    <div class="row g-3 align-items-end">
+                        <div class="col-12">
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" type="checkbox" name="profit_toggle" id="profit_toggle">
+                                <label class="form-check-label" for="profit_toggle">Use a profit range instead of a fixed amount</label>
+                            </div>
+                        </div>
+                        <div id="profit-fixed" class="col-md-3 col-6">
+                            <label class="form-label">Profit amount % <small class="text-muted">payout on a win</small></label>
+                            <input type="number" class="form-control" name="profit_amount" step="0.01" min="0" value="1">
+                        </div>
+                        <div id="profit-range" class="col-md-6 col-12 row g-3 hidden">
+                            <div class="col-6">
+                                <label class="form-label">Profit min %</label>
+                                <input type="number" class="form-control" name="profit_min" step="0.01" min="0" value="0.5">
+                            </div>
+                            <div class="col-6">
+                                <label class="form-label">Profit max %</label>
+                                <input type="number" class="form-control" name="profit_max" step="0.01" min="0" value="2">
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="row g-3 align-items-end mt-2">
+                        <div class="col-12">
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" type="checkbox" name="loss_toggle" id="loss_toggle">
+                                <label class="form-check-label" for="loss_toggle">Use a loss range instead of a fixed amount</label>
+                            </div>
+                        </div>
+                        <div id="loss-fixed" class="col-md-3 col-6">
+                            <label class="form-label">Loss amount % <small class="text-muted">cost on a loss</small></label>
+                            <input type="number" class="form-control" name="loss_amount" step="0.01" min="0" value="1">
+                        </div>
+                        <div id="loss-range" class="col-md-6 col-12 row g-3 hidden">
+                            <div class="col-6">
+                                <label class="form-label">Loss min %</label>
+                                <input type="number" class="form-control" name="loss_min" step="0.01" min="0" value="0.5">
+                            </div>
+                            <div class="col-6">
+                                <label class="form-label">Loss max %</label>
+                                <input type="number" class="form-control" name="loss_max" step="0.01" min="0" value="2">
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="alert alert-danger mt-3 hidden" id="form-error"></div>
+
+                    <div class="d-flex gap-2 mt-4">
+                        <button type="submit" id="start-btn" class="btn btn-primary"><i class="fas fa-play me-1"></i>Start</button>
+                        <button type="button" id="reset-btn" class="btn btn-outline-secondary"><i class="fas fa-rotate-left me-1"></i>Reset</button>
+                    </div>
+                </form>
+            </div>
+        </section>
+
+        <!-- Monitor: shown once a simulation exists (running or finished). Read-only. -->
+        <section id="monitor-view" class="card hidden">
+            <div class="card-body">
+                <div class="row g-2 config-summary" id="config-summary"></div>
+
+                <div class="row g-3 my-3">
+                    <div class="col-md col-6">
+                        <div class="card metric-card">
+                            <div class="card-body py-2 px-3">
+                                <small class="text-muted d-block">Progress</small>
+                                <span class="fs-5 fw-bold" id="m-progress">0 / 0</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md col-6">
+                        <div class="card metric-card">
+                            <div class="card-body py-2 px-3">
+                                <small class="text-muted d-block">Balance</small>
+                                <span class="fs-5 fw-bold" id="m-balance">0</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md col-6">
+                        <div class="card metric-card">
+                            <div class="card-body py-2 px-3">
+                                <small class="text-muted d-block">Best so far</small>
+                                <span class="fs-5 fw-bold" id="m-best">0</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md col-6">
+                        <div class="card metric-card">
+                            <div class="card-body py-2 px-3">
+                                <small class="text-muted d-block">Worst so far</small>
+                                <span class="fs-5 fw-bold" id="m-worst">0</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md col-6">
+                        <div class="card metric-card">
+                            <div class="card-body py-2 px-3">
+                                <small class="text-muted d-block">Last trade</small>
+                                <span class="fs-5 fw-bold" id="m-last">—</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="chart-wrap mb-3">
+                    <canvas id="chart"></canvas>
+                </div>
+
+                <div class="row g-3 mb-3 hidden" id="stats-panel"></div>
+
+                <div class="d-flex gap-2">
+                    <button type="button" id="m-start-btn" class="btn btn-primary"><i class="fas fa-play me-1"></i>Start</button>
+                    <button type="button" id="m-stop-btn" class="btn btn-danger hidden"><i class="fas fa-stop me-1"></i>Stop</button>
+                    <button type="button" id="m-reset-btn" class="btn btn-outline-secondary hidden"><i class="fas fa-rotate-left me-1"></i>Reset</button>
+                </div>
+            </div>
+        </section>
+
+    </div>
+
+    <script src="/static/equation/plugins/global/vendors.min.js"></script>
+    <script src="/static/equation/bootstrap/js/bootstrap.bundle.min.js"></script>
+    <script src="/static/equation/plugins/perfect-scrollbar/perfect-scrollbar.min.js"></script>
+    <script src="/static/equation/layouts/vertical-dark-menu/app.js"></script>
+    <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+</body>
+</html>

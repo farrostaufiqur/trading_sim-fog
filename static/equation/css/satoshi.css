@@ -1,0 +1,121 @@
+/**
+ * Font Family: Satoshi
+ * Designed by: Deni Anggara
+ * URL: https://www.fontshare.com/fonts/satoshi
+ */
+
+/* ── GLOBAL TEXT SCALE ──────────────────────────────────────────────
+   Ubah satu nilai di sini untuk memperbesar/memperkecil semua teks.
+   106.25% = 17px (default browser 16px × 106.25%).
+   Untuk kembali ke ukuran asal gunakan 100%.
+──────────────────────────────────────────────────────────────────── */
+html {
+  font-size: 106.25%;
+}
+
+@font-face {
+  font-family: "Satoshi";
+  src: url("../fonts/Satoshi-Light.woff2") format("woff2"),
+    url("../fonts/Satoshi-Light.woff") format("woff"),
+    url("../fonts/Satoshi-Light.ttf") format("truetype");
+  font-weight: 300;
+  font-display: swap;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: "Satoshi";
+  src: url("../fonts/Satoshi-Regular.woff2") format("woff2"),
+    url("../fonts/Satoshi-Regular.woff") format("woff"),
+    url("../fonts/Satoshi-Regular.ttf") format("truetype");
+  font-weight: 400;
+  font-display: swap;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: "Satoshi";
+  src: url("../fonts/Satoshi-Medium.woff2") format("woff2"),
+    url("../fonts/Satoshi-Medium.woff") format("woff"),
+    url("../fonts/Satoshi-Medium.ttf") format("truetype");
+  font-weight: 500;
+  font-display: swap;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: "Satoshi";
+  src: url("../fonts/Satoshi-Bold.woff2") format("woff2"),
+    url("../fonts/Satoshi-Bold.woff") format("woff"),
+    url("../fonts/Satoshi-Bold.ttf") format("truetype");
+  font-weight: 700;
+  font-display: swap;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: "Satoshi";
+  src: url("../fonts/Satoshi-Black.woff2") format("woff2"),
+    url("../fonts/Satoshi-Black.woff") format("woff"),
+    url("../fonts/Satoshi-Black.ttf") format("truetype");
+  font-weight: 900;
+  font-display: swap;
+  font-style: normal;
+}
+
+/* ── Floating Submit Button ──────────────────────────────── */
+.btn-float {
+  position: fixed !important;
+  bottom: 2rem;
+  right: 2rem;
+  z-index: 99;
+  border-radius: 2rem;
+  padding: 0.7rem 1.6rem;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.20);
+  display: inline-flex !important;
+  align-items: center;
+  gap: 0.4rem;
+  font-weight: 600;
+  font-size: .875rem;
+  transition: transform .2s ease, box-shadow .2s ease;
+  cursor: pointer;
+  border: none;
+  text-decoration: none;
+}
+.btn-float:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.28);
+}
+.has-float-btn {
+  padding-bottom: 5rem;
+}
+
+/* ── Floating Button Group (Simpan + Batal side-by-side) ─── */
+.float-btn-group {
+  position: fixed;
+  bottom: 2rem;
+  right: 2rem;
+  z-index: 99;
+  display: flex;
+  gap: .5rem;
+}
+.float-btn-group .btn {
+  border-radius: 2rem !important;
+  padding: .65rem 1.4rem !important;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, .20) !important;
+  font-weight: 600;
+  font-size: .875rem;
+  display: inline-flex !important;
+  align-items: center;
+  gap: .4rem;
+  transition: transform .2s ease, box-shadow .2s ease;
+  text-decoration: none;
+}
+.float-btn-group .btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, .28) !important;
+}
+
+/* Bootstrap modals must sit above mobile hamburger (z-9998) and sidebar (z-9999) */
+.modal-backdrop { z-index: 10000 !important; }
+.modal          { z-index: 10001 !important; }

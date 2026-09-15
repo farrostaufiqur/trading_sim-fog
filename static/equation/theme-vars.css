@@ -1,0 +1,50 @@
+/* =============================================================
+   theme-vars.css — Global CSS custom properties
+   Dimuat sebelum smaalbayan.css; smaalbayan.css punya fallback
+   untuk variabel terpenting jika file ini gagal load.
+   ============================================================= */
+
+:root {
+
+  /* ── Brand utama ─────────────────────────────────────────── */
+  --primary:              #3C50E0;
+  --primary-dark:         #2A3BB8;
+  --primary-light:        #d4d8f9;
+  --primary-xlight:       #eef0fd;
+  --primary-gradient-end: #5A6AF0;
+  --primary-icon:         #3C50E0;
+  --primary-badge-bg:     rgba(60, 80, 224, 0.14);
+
+  --secondary:  #80CAEE;
+  --accent:     #F59E0B;
+  --neutral:    #1C2434;
+  --bg-sidebar: #1C2434;
+
+  /* ── Semantic ─────────────────────────────────────────────── */
+  --success:       #28A745;
+  --warning:       #FFC107;
+  --warning-light: #fff8e1;
+  --danger:        #DC3545;
+
+  /* ── Chart / data colors ─────────────────────────────────── */
+  --color-chart-pink:  #E91E8C;
+  --color-chart-cyan:  #00BCD4;
+  --color-amber:       #F59E0B;
+  --color-emerald:     #10B981;
+  --color-emerald-alt: #059669;
+  --color-indigo:      #6366F1;
+  --color-orange:      #F97316;
+  --color-pink:        #EC4899;
+  --color-rose:        #F43F5E;
+  --color-sky:         #0EA5E9;
+  --color-teal:        #14B8A6;
+
+  /* ── Semester (rapor) ─────────────────────────────────────── */
+  --semester-ganjil: #3C50E0;   /* biru — ganjil  */
+  --semester-genap:  #10B981;   /* hijau — genap  */
+
+  /* ── Landing / du- (di-override inline dari home_settings) ── */
+  --du-primary: #3C50E0;
+  --du-accent:  #F59E0B;
+
+}
